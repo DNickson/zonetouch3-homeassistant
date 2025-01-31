@@ -205,6 +205,3 @@ class Zonetouch3:
 
         UPDATE_ZONE_STATE_STR = self.hex_string(UPDATE_ZONE_STATE_HEX)
         UPDATE_ZONE_STATE = self.send_data(self._address, self._port, UPDATE_ZONE_STATE_STR)
-
-zt3 = Zonetouch3('192.168.15.7', 7030, '3')
-print(zt3.get_zone_percentage())
