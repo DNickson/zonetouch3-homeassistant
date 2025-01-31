@@ -1,2 +1,2 @@
-# zonetouch3-homeassistant
-Homeassistant HACS Integration for Polyaire Zonetouch 3
+# zonetouch3-polyaire-ha
+HACS integration for Polyaire ZoneTouch 3
