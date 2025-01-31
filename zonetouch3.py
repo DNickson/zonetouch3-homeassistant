@@ -1,7 +1,7 @@
 import socket
 import logging
 import math
-
+import time
 LOGGER = logging.getLogger("ZoneTouch3")
 
 class Zonetouch3:
@@ -124,8 +124,9 @@ class Zonetouch3:
 
         DATA_LENGTH = self.hex_to_int(self.extract_data(REQUEST_ALL_GROUPS_RESP, 13, 2))
 
-        GROUP_NAME = self.hex_to_ascii(self.extract_data(REQUEST_ALL_GROUPS_RESP, 13 + 1 + (self._zone * 13), 12))
-
+        print(int(self._zone))
+        GROUP_NAME = self.hex_to_ascii(self.extract_data(REQUEST_ALL_GROUPS_RESP, 13 + 1 + (int(self._zone) * 13), 12))
+        print(GROUP_NAME)
         return GROUP_NAME
     
     def get_zonetouch_temp(self) -> int:
@@ -205,3 +206,6 @@ class Zonetouch3:
 
         UPDATE_ZONE_STATE_STR = self.hex_string(UPDATE_ZONE_STATE_HEX)
         UPDATE_ZONE_STATE = self.send_data(self._address, self._port, UPDATE_ZONE_STATE_STR)
+
+zt3 = Zonetouch3("192.168.15.7", 7030, "0")
+zt3.get_zone_name()

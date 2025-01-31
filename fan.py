@@ -10,6 +10,7 @@ from typing import Any
 import voluptuous as vol
 
 from homeassistant.components.fan import PLATFORM_SCHEMA, FanEntity, FanEntityFeature
+from homeassistant.components.text import PLATFORM_SCHEMA, TextEntity
 from homeassistant.const import CONF_ENTITIES, CONF_IP_ADDRESS, CONF_NAME, CONF_PORT
 from homeassistant.core import HomeAssistant
 
@@ -65,11 +66,13 @@ class zonetouch_3(FanEntity):
 
     def __init__(self, fan) -> None:
         _LOGGER.info(pformat(fan))
-
         self.fan = Zonetouch3(fan["address"], fan["port"], fan["zone"])
+        time.sleep(0.5)
         self._name = self.fan.get_zone_name()
-        self._attr_unique_id = self._name
+        self._attr_unique_id = fan["name"]
+        time.sleep(0.5)
         self._state = self.fan.get_zone_state()
+        time.sleep(0.5)
         self._attr_percentage = self.fan.get_zone_percentage()
 
         # Getters
@@ -107,3 +110,4 @@ class zonetouch_3(FanEntity):
         """Get live state of individual fan."""
         self._state = self.fan.get_zone_state()
         self._attr_percentage = self.fan.get_zone_percentage()
+        time.sleep(0.5)
