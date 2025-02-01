@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pprint import pformat
 import time
+from datetime import timedelta
 from typing import Any
 
 import voluptuous as vol
@@ -22,6 +23,9 @@ from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from .zonetouch3 import Zonetouch3
 
 _LOGGER = logging.getLogger("ZoneTouch3")
+
+DOMAIN = "zonetouch3"
+SCAN_INTERVAL = timedelta(seconds=5)
 
 # Validation of the user's configuration
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
@@ -50,7 +54,7 @@ def setup_platform(
                         "address": config[CONF_IP_ADDRESS],
                         "port": config[CONF_PORT],
                         "zone": zone_no,
-                    }
+                    }, hass
                 )
             ]
         )
@@ -64,16 +68,15 @@ class zonetouch_3(FanEntity):
         | FanEntityFeature.TURN_ON
     )
 
-    def __init__(self, fan) -> None:
+    def __init__(self, fan, hass) -> None:
         _LOGGER.info(pformat(fan))
         self.fan = Zonetouch3(fan["address"], fan["port"], fan["zone"])
-        time.sleep(0.5)
-        self._name = self.fan.get_zone_name()
         self._attr_unique_id = fan["name"]
-        time.sleep(0.5)
-        self._state = self.fan.get_zone_state()
-        time.sleep(0.5)
-        self._attr_percentage = self.fan.get_zone_percentage()
+        self._zone = fan["zone"]
+        self._hass = hass
+        self._name = self.fan.return_zone_name(self._hass.data[DOMAIN]['global_state'], self._zone)
+        self._state = self.fan.return_zone_state(self._hass.data[DOMAIN]['global_state'], self._zone)
+        self._attr_percentage = self.fan.return_zone_percentage(self._hass.data[DOMAIN]['global_state'], self._zone)
 
         # Getters
     @property
@@ -88,12 +91,12 @@ class zonetouch_3(FanEntity):
     
     def turn_on(self, **kwargs: Any) -> None:
         self.fan.update_zone_state('03', 150)
-        time.sleep(0.2)
+        time.sleep(5)
         self.update()
     
     def turn_off(self, **kwargs: Any) -> None:
         self.fan.update_zone_state('02', 150)
-        time.sleep(0.2)
+        time.sleep(5)
         self.update()
 
     @property
@@ -103,11 +106,67 @@ class zonetouch_3(FanEntity):
     
     def set_percentage(self, percentage: int) -> None:
         self.fan.update_zone_state('80', percentage)
-        time.sleep(0.2)
+        time.sleep(5)
         self.update()
     
     def update(self) -> None:
         """Get live state of individual fan."""
-        self._state = self.fan.get_zone_state()
-        self._attr_percentage = self.fan.get_zone_percentage()
-        time.sleep(0.5)
+        self._state = self.fan.return_zone_state(self._hass.data[DOMAIN]['global_state'], self._zone)
+        self._attr_percentage = self.fan.return_zone_percentage(self._hass.data[DOMAIN]['global_state'], self._zone)
+
+#class zonetouch_3(FanEntity):
+#
+#    _attr_icon = "mdi:air-conditioner"
+#    _attr_supported_features = (
+#        FanEntityFeature.SET_SPEED
+#        | FanEntityFeature.TURN_OFF
+#        | FanEntityFeature.TURN_ON
+#    )
+#
+#    def __init__(self, fan) -> None:
+#        _LOGGER.info(pformat(fan))
+#        self.fan = Zonetouch3(fan["address"], fan["port"], fan["zone"])
+#        time.sleep(0.5)
+#        self._name = self.fan.get_zone_name()
+#        self._attr_unique_id = fan["name"]
+#        time.sleep(0.5)
+#        self._state = self.fan.get_zone_state()
+#        time.sleep(0.5)
+#        self._attr_percentage = self.fan.get_zone_percentage()
+#
+#        # Getters
+#    @property
+#    def name(self) -> str:
+#        """Return the display name of this fan."""
+#        return self._name
+#    
+#    @property
+#    def is_on(self) -> bool | None:
+#        """Return true if the entity is on."""
+#        return self._state
+#    
+#    def turn_on(self, **kwargs: Any) -> None:
+#        self.fan.update_zone_state('03', 150)
+#        time.sleep(0.2)
+#        self.update()
+#    
+#    def turn_off(self, **kwargs: Any) -> None:
+#        self.fan.update_zone_state('02', 150)
+#        time.sleep(0.2)
+#        self.update()
+#
+#    @property
+#    def percentage(self) -> int | None:
+#        """Return the current percentage."""
+#        return self._attr_percentage
+#    
+#    def set_percentage(self, percentage: int) -> None:
+#        self.fan.update_zone_state('80', percentage)
+#        time.sleep(0.2)
+#        self.update()
+#    
+#    def update(self) -> None:
+#        """Get live state of individual fan."""
+#        self._state = self.fan.get_zone_state()
+#        self._attr_percentage = self.fan.get_zone_percentage()
+#        time.sleep(0.5)

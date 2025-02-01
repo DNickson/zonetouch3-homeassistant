@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pprint import pformat
 import time
+from datetime import timedelta
 from typing import Any
 
 import voluptuous as vol
@@ -21,6 +22,9 @@ from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from .zonetouch3 import Zonetouch3
 
 _LOGGER = logging.getLogger("ZoneTouch3")
+
+DOMAIN = "zonetouch3"
+SCAN_INTERVAL = timedelta(seconds=5)
 
 # Validation of the user's configuration
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
@@ -49,41 +53,74 @@ def setup_platform(
                         "address": config[CONF_IP_ADDRESS],
                         "port": config[CONF_PORT],
                         "zone": zone_no,
-                    }
+                    }, hass
+                )
+            ]
+        )
+
+    add_entities(
+            [
+                global_zonetouch_data(
+                    {
+                        "name": config[CONF_NAME] + "Global State" + "01",
+                        "address": config[CONF_IP_ADDRESS],
+                        "port": config[CONF_PORT],
+                        "zone": zone_no,
+                    }, hass
                 )
             ]
         )
 
 class zonetouch_3_stats(TextEntity):
 
-    def __init__(self, text) -> None:
+    def __init__(self, text, hass) -> None:
         _LOGGER.info(pformat(text))
         self.text = Zonetouch3(text["address"], text["port"], text["zone"])
         self._zone = text["zone"]
-        self._confname = text["name"]
-        time.sleep(2)
         self._name = text["name"]
+        self._hass = hass
         self._attr_unique_id = self._name
-        time.sleep(0.5)
         self._attr_native_value = self.determine_type()
     
     def determine_type(self):
         match str(self._zone):
             case '0':
-                self._attr_native_value = self.text.get_zonetouch_system_id()
+                self._attr_native_value = self.text.return_system_id(self._hass.data[DOMAIN]['global_state'])
             case '1':
-                self._attr_native_value = self.text.get_zonetouch_system_name()
+                self._attr_native_value = self.text.return_system_name(self._hass.data[DOMAIN]['global_state'])
             case '2':
-                self._attr_native_value = self.text.get_zonetouch_system_installer()
+                self._attr_native_value = self.text.return_system_installer(self._hass.data[DOMAIN]['global_state'])
             case '3':
-                self._attr_native_value = self.text.get_zonetouch_system_installer_number()
+                self._attr_native_value = self.text.return_installer_number(self._hass.data[DOMAIN]['global_state'])
             case '4':
-                self._attr_native_value = self.text.get_zonetouch_system_firmware()
+                self._attr_native_value = self.text.return_firmware_version(self._hass.data[DOMAIN]['global_state'])
             case '5':
-                self._attr_native_value = self.text.get_zonetouch_console_version()
+                self._attr_native_value = self.text.return_console_version(self._hass.data[DOMAIN]['global_state'])
+            case '6':
+                self._attr_native_value = self.text.return_console_temp(self._hass.data[DOMAIN]['global_state'])
 
         return self._attr_native_value
 
     def set_value(self, value: str) -> None:
         self.determine_type()
-        time.sleep(0.5)
+    
+    def update(self) -> None:
+        self.determine_type()
+
+class global_zonetouch_data(TextEntity):
+
+    def __init__(self, text, hass: HomeAssistant) -> None:
+        _LOGGER.info(pformat(text))
+        self._text = Zonetouch3(text["address"], text["port"], text["zone"])
+        self._name = text["name"]
+        self._attr_unique_id = self._name
+        self._hass = hass
+        self._attr_native_value = "Updater - Hide Me - I handle state updates"
+
+    def set_value(self, value: str) -> None:
+        self._attr_native_value = "Updater - Hide Me - I handle state updates"
+        self._hass.data[DOMAIN]['global_state'] = self._text.request_all_information()
+
+    def update(self) -> None:
+        self._attr_native_value = "Updater - Hide Me - I handle state updates"
+        self._hass.data[DOMAIN]['global_state'] = self._text.request_all_information()

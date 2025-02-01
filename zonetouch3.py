@@ -51,10 +51,6 @@ class Zonetouch3:
 
         return data
 
-    def extract_bits(self, hex_data: str):
-        HEX_DATA_INT = self.hex_to_int(hex_data)
-
-
     def send_data(self, server_ip: str, server_port: int, hex_data: str) -> str:
         dbytes = bytes.fromhex(hex_data)
 
@@ -65,42 +61,52 @@ class Zonetouch3:
         response_hex = response_bytes.hex().upper()
 
         return response_hex
+    
+    def request_all_information(self) -> str:
+        REQUEST_ALL_HEX = ['55', '55', '55', '55', '55', 'aa', '90', 'b0', '01', '1f', '00', '02', 'ff', 'f0', 'cb', '8c']
+        REQUEST_ALL_STRING = self.hex_string(REQUEST_ALL_HEX)
+        REQUEST_ALL_RESP = self.send_data(self._address, self._port, REQUEST_ALL_STRING)
 
-    def get_zone_percentage(self) -> str:
-        # Example Response
-        # 55 55 55 AA B0 80 01 C0 0030 21 00 | 00 00 00 08 00 05 | 40649C6401F40000 | 41649C6401F40000 | 02649C0001F40000| 03649C0001F40000 | 44649C6401F40000 5350
-        REQUEST_ZONE_STATE_HEX = ['55', '55', '55', 'aa', '80', 'b0', '01', 'c0', '00', '08', '21', '00', '00', '00', '00', '00', '00', '00', 'a4', '31']
-        REQUEST_ZONE_STATE_STR = self.hex_string(REQUEST_ZONE_STATE_HEX)
-        REQUEST_ZONE_STATE = self.send_data(self._address, self._port, REQUEST_ZONE_STATE_STR)
-        LOGGER.debug(f"Response from the Zonetouch for percentage: {REQUEST_ZONE_STATE}")
+        return REQUEST_ALL_RESP
+    
+    def return_system_id(self, zt3_data: str) -> str:
+        SYSTEM_ID = self.hex_to_ascii(self.extract_data(zt3_data, 12, 8))
+        return SYSTEM_ID
+    
+    def return_system_name(self, zt3_data: str) -> str:
+        SYSTEM_NAME = self.hex_to_ascii(self.extract_data(zt3_data, 20, 16))
+        return SYSTEM_NAME
+    
+    def return_system_installer(self, zt3_data: str) -> str:
+        SYSTEM_INSTALLER = self.hex_to_ascii(self.extract_data(zt3_data, 46, 10))
+        return SYSTEM_INSTALLER
+    
+    def return_installer_number(self, zt3_data: str) -> str:
+        INSTALLER_NUMBER = self.hex_to_ascii(self.extract_data(zt3_data, 56, 12))
+        return INSTALLER_NUMBER
+    
+    def return_console_temp(self, zt3_data: str) -> str:
+        CONSOLE_TEMP = self.hex_to_int(self.extract_data(zt3_data, 68, 2))
+        REAL_TEMP_DEC = (CONSOLE_TEMP - 500) / 10
+        REAL_TEMP = math.ceil(REAL_TEMP_DEC)
+        return str(REAL_TEMP)
+    
+    def return_firmware_version(self, zt3_data: str) -> str:
+        FIRMWARE_VERSION = self.hex_to_ascii(self.extract_data(zt3_data, 79, 7))
+        return FIRMWARE_VERSION
+    
+    def return_console_version(self, zt3_data: str) -> str:
+        CONSOLE_VERSION = self.hex_to_ascii(self.extract_data(zt3_data, 95, 7))
+        return CONSOLE_VERSION
+    
+    def return_zone_name(self, zt3_data: str, zone: str) -> str:
+        ZONE_NAME = self.hex_to_ascii(self.extract_data(zt3_data, 133 + (int(zone) * 22), 12))
+        
+        return ZONE_NAME
+        
+    def return_zone_state(self, zt3_data: str, zone: str):
+        GROUP_DATA = self.extract_data(zt3_data, 123 + (int(zone) * 22), 1)
 
-        GROUP_DATA = self.extract_data(REQUEST_ZONE_STATE, 18 + (int(self._zone)*8), 8)
-        LOGGER.debug(f"The extracted data for percentage: {GROUP_DATA}")
-
-        GROUP_OPEN_PERCENTAGE_HEX = self.extract_data(GROUP_DATA, 1, 1)
-        LOGGER.debug(f"The extracted hex for percentage: {GROUP_OPEN_PERCENTAGE_HEX}")
-
-        GROUP_OPEN_PERCENTAGE_BIN = bin(int(GROUP_OPEN_PERCENTAGE_HEX, 16))[2:].zfill(8)
-        LOGGER.debug(f"The extracted binary for percentage: {GROUP_OPEN_PERCENTAGE_BIN}")
-
-        GROUP_OPEN_PERCENTAGE_BTS71 = GROUP_OPEN_PERCENTAGE_BIN[1:]
-        LOGGER.debug(f"The extracted bits 7-1 for percentage: {GROUP_OPEN_PERCENTAGE_BTS71}")
-
-        GROUP_OPEN_PERCENTAGE_INT = int(GROUP_OPEN_PERCENTAGE_BTS71, 2)
-        LOGGER.debug(f"The extracted open percentage as int: {GROUP_OPEN_PERCENTAGE_INT}")
-
-        self._percentage = GROUP_OPEN_PERCENTAGE_INT
-
-        return self._percentage
-
-    def get_zone_state(self) -> str:
-        # Example Response
-        # 55 55 55 AA B0 80 01 C0 0030 21 00 | 00 00 00 08 00 05 | 40649C6401F40000 | 41649C6401F40000 | 02649C0001F40000| 03649C0001F40000 | 44649C6401F40000 5350
-        REQUEST_ZONE_STATE_HEX = ['55', '55', '55', 'aa', '80', 'b0', '01', 'c0', '00', '08', '21', '00', '00', '00', '00', '00', '00', '00', 'a4', '31']
-        REQUEST_ZONE_STATE_STR = self.hex_string(REQUEST_ZONE_STATE_HEX)
-        REQUEST_ZONE_STATE = self.send_data(self._address, self._port, REQUEST_ZONE_STATE_STR)
-
-        GROUP_DATA = self.extract_data(REQUEST_ZONE_STATE, 18 + (int(self._zone)*8), 8)
         GROUP_POWER_AND_ID_HEX = self.extract_data(GROUP_DATA, 0, 1)
         GROUP_POWER_AND_ID_BIN = bin(int(GROUP_POWER_AND_ID_HEX, 16))[2:].zfill(8)
         GROUP_POWER_BIN = GROUP_POWER_AND_ID_BIN[:2]
@@ -116,18 +122,11 @@ class Zonetouch3:
                 self._state = False #Unknown
 
         return self._state
+    
+    def return_zone_percentage(self, zt3_data: str, zone: str):
+        percentage =  self.hex_to_int(self.extract_data(zt3_data, 124 + (int(zone) * 22), 1))
 
-    def get_zone_name(self) -> str:
-        REQUEST_ALL_GROUPS_HEX = ['55', '55', '55', 'AA', '90', 'b0', '01', '1f', '00', '02', 'ff', '13', '42', 'cd']
-        REQUEST_ALL_GROUPS_STR = self.hex_string(REQUEST_ALL_GROUPS_HEX)
-        REQUEST_ALL_GROUPS_RESP = self.send_data(self._address, self._port, REQUEST_ALL_GROUPS_STR)
-
-        DATA_LENGTH = self.hex_to_int(self.extract_data(REQUEST_ALL_GROUPS_RESP, 13, 2))
-
-        print(int(self._zone))
-        GROUP_NAME = self.hex_to_ascii(self.extract_data(REQUEST_ALL_GROUPS_RESP, 13 + 1 + (int(self._zone) * 13), 12))
-        print(GROUP_NAME)
-        return GROUP_NAME
+        return percentage
     
     def get_zonetouch_temp(self) -> int:
         REQUEST_ALL_INFO_HEX = ['55','55','55','aa','90','b0','01','1f','00','02','ff','f0','cb','8c']
@@ -138,60 +137,6 @@ class Zonetouch3:
         REAL_TEMP = math.ceil((CONSOLE_RAW_TEMP - 500) / 10)
 
         return REAL_TEMP
-
-    def get_zonetouch_system_id(self) -> str:
-        REQUEST_ALL_INFO_HEX = ['55','55','55','aa','90','b0','01','1f','00','02','ff','f0','cb','8c']
-        REQUEST_ALL_INFO_STR = self.hex_string(REQUEST_ALL_INFO_HEX)
-        REQUEST_ALL_INFO_STR_RESP = self.send_data(self._address, self._port, REQUEST_ALL_INFO_STR)
-
-        CONSOLE_SYSTEM_ID = self.hex_to_ascii(self.extract_data(REQUEST_ALL_INFO_STR_RESP, 12, 8))
-
-        return CONSOLE_SYSTEM_ID
-    
-    def get_zonetouch_system_name(self) -> str:
-        REQUEST_ALL_INFO_HEX = ['55','55','55','aa','90','b0','01','1f','00','02','ff','f0','cb','8c']
-        REQUEST_ALL_INFO_STR = self.hex_string(REQUEST_ALL_INFO_HEX)
-        REQUEST_ALL_INFO_STR_RESP = self.send_data(self._address, self._port, REQUEST_ALL_INFO_STR)
-
-        CONSOLE_SYSTEM_NAME = self.hex_to_ascii(self.extract_data(REQUEST_ALL_INFO_STR_RESP, 20, 16))
-        
-        return CONSOLE_SYSTEM_NAME
-
-    def get_zonetouch_system_installer(self) -> str:
-        REQUEST_ALL_INFO_HEX = ['55','55','55','aa','90','b0','01','1f','00','02','ff','f0','cb','8c']
-        REQUEST_ALL_INFO_STR = self.hex_string(REQUEST_ALL_INFO_HEX)
-        REQUEST_ALL_INFO_STR_RESP = self.send_data(self._address, self._port, REQUEST_ALL_INFO_STR)
-
-        CONSOLE_INSTALLER_NAME = self.hex_to_ascii(self.extract_data(REQUEST_ALL_INFO_STR_RESP, 46, 10))
-        
-        return CONSOLE_INSTALLER_NAME
-    
-    def get_zonetouch_system_installer_number(self) -> str:
-        REQUEST_ALL_INFO_HEX = ['55','55','55','aa','90','b0','01','1f','00','02','ff','f0','cb','8c']
-        REQUEST_ALL_INFO_STR = self.hex_string(REQUEST_ALL_INFO_HEX)
-        REQUEST_ALL_INFO_STR_RESP = self.send_data(self._address, self._port, REQUEST_ALL_INFO_STR)
-
-        CONSOLE_INSTALLER_NUMBER = self.hex_to_ascii(self.extract_data(REQUEST_ALL_INFO_STR_RESP, 56, 12))
-        
-        return CONSOLE_INSTALLER_NUMBER
-    
-    def get_zonetouch_system_firmware(self) -> str:
-        REQUEST_ALL_INFO_HEX = ['55','55','55','aa','90','b0','01','1f','00','02','ff','f0','cb','8c']
-        REQUEST_ALL_INFO_STR = self.hex_string(REQUEST_ALL_INFO_HEX)
-        REQUEST_ALL_INFO_STR_RESP = self.send_data(self._address, self._port, REQUEST_ALL_INFO_STR)
-
-        CONSOLE_FIRMWARE = self.hex_to_ascii(self.extract_data(REQUEST_ALL_INFO_STR_RESP, 79, 7))
-       
-        return CONSOLE_FIRMWARE
-    
-    def get_zonetouch_console_version(self) -> str:
-        REQUEST_ALL_INFO_HEX = ['55','55','55','aa','90','b0','01','1f','00','02','ff','f0','cb','8c']
-        REQUEST_ALL_INFO_STR = self.hex_string(REQUEST_ALL_INFO_HEX)
-        REQUEST_ALL_INFO_STR_RESP = self.send_data(self._address, self._port, REQUEST_ALL_INFO_STR)
-
-        CONSOLE_VERSION = self.hex_to_ascii(self.extract_data(REQUEST_ALL_INFO_STR_RESP, 95, 7))
-
-        return CONSOLE_VERSION
 
     def update_zone_state(self, state: str, percentage: int) -> None:
         UPDATE_ZONE_STATE_HEX = ['55', '55', '55', 'aa', '80', 'b0', '0f', 'c0', '00', '0c', '20', '00', '00', '00', '00', '04', '00', '01', '00', '02', '00', '00', '00', '00']
@@ -206,6 +151,3 @@ class Zonetouch3:
 
         UPDATE_ZONE_STATE_STR = self.hex_string(UPDATE_ZONE_STATE_HEX)
         UPDATE_ZONE_STATE = self.send_data(self._address, self._port, UPDATE_ZONE_STATE_STR)
-
-zt3 = Zonetouch3("192.168.15.7", 7030, "0")
-zt3.get_zone_name()
