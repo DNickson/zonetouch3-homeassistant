@@ -89,7 +89,7 @@ class Zonetouch3:
         CONSOLE_TEMP = self.hex_to_int(self.extract_data(zt3_data, 68, 2))
         REAL_TEMP_DEC = (CONSOLE_TEMP - 500) / 10
         REAL_TEMP = math.ceil(REAL_TEMP_DEC)
-        return str(REAL_TEMP)
+        return REAL_TEMP
     
     def return_firmware_version(self, zt3_data: str) -> str:
         FIRMWARE_VERSION = self.hex_to_ascii(self.extract_data(zt3_data, 79, 7))

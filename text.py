@@ -24,7 +24,7 @@ from .zonetouch3 import Zonetouch3
 _LOGGER = logging.getLogger("ZoneTouch3")
 
 DOMAIN = "zonetouch3"
-SCAN_INTERVAL = timedelta(seconds=5)
+SCAN_INTERVAL = timedelta(seconds=7)
 
 # Validation of the user's configuration
 PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
@@ -77,10 +77,29 @@ class zonetouch_3_stats(TextEntity):
         _LOGGER.info(pformat(text))
         self.text = Zonetouch3(text["address"], text["port"], text["zone"])
         self._zone = text["zone"]
-        self._name = text["name"]
+        #self._name = text["name"]
         self._hass = hass
-        self._attr_unique_id = self._name
         self._attr_native_value = self.determine_type()
+
+        match str(self._zone):
+            case '0':
+                self._name = "System ID"
+                self._attr_unique_id = self._name
+            case '1':
+                self._name = "System Name"
+                self._attr_unique_id = self._name
+            case '2':
+                self._name = "System Installer"
+                self._attr_unique_id = self._name
+            case '3':
+                self._name = "Installer Number"
+                self._attr_unique_id = self._name
+            case '4':
+                self._name = "Firmware Version"
+                self._attr_unique_id = self._name
+            case '5':
+                self._name = self._name = "Console Version"
+                self._attr_unique_id = self._name
     
     def determine_type(self):
         match str(self._zone):
@@ -118,9 +137,11 @@ class global_zonetouch_data(TextEntity):
         self._attr_native_value = "Updater - Hide Me - I handle state updates"
 
     def set_value(self, value: str) -> None:
-        self._attr_native_value = "Updater - Hide Me - I handle state updates"
-        self._hass.data[DOMAIN]['global_state'] = self._text.request_all_information()
+        if self._hass.data[DOMAIN]['global_state']:
+            self._attr_native_value = "Updater - Hide Me - I handle state updates"
+            self._hass.data[DOMAIN]['global_state'] = self._text.request_all_information()
 
     def update(self) -> None:
-        self._attr_native_value = "Updater - Hide Me - I handle state updates"
-        self._hass.data[DOMAIN]['global_state'] = self._text.request_all_information()
+        if self._hass.data[DOMAIN]['global_state']:
+            self._attr_native_value = "Updater - Hide Me - I handle state updates"
+            self._hass.data[DOMAIN]['global_state'] = self._text.request_all_information()
