@@ -1,74 +1,59 @@
-"""Platform for light integration."""
+"""Platform for sensor integration."""
 
 from __future__ import annotations
 
 import logging
 from pprint import pformat
-import time
 from datetime import timedelta
-from typing import Any
 
-import voluptuous as vol
-
-from homeassistant.components.sensor import PLATFORM_SCHEMA, SensorEntity, SensorDeviceClass, SensorStateClass
-from homeassistant.const import CONF_ENTITIES, CONF_IP_ADDRESS, CONF_NAME, CONF_PORT, UnitOfTemperature
+from homeassistant.components.sensor import SensorEntity, SensorDeviceClass, SensorStateClass
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
-
-# Import the device class from the component that you want to support
-import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
+from .const import DOMAIN
 from .zonetouch3 import Zonetouch3
 
 _LOGGER = logging.getLogger("ZoneTouch3")
 
-DOMAIN = "zonetouch3"
 SCAN_INTERVAL = timedelta(seconds=300)
 
-# Validation of the user's configuration
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
-    vol.Optional(CONF_NAME, default ="zonetouch3"): cv.string,
-    vol.Optional(CONF_ENTITIES, default ="8"): cv.positive_int,
-    vol.Required(CONF_IP_ADDRESS): cv.string,
-    vol.Optional(CONF_PORT, default = 7030): cv.port,
-})
 
-def setup_platform(
+async def async_setup_entry(
     hass: HomeAssistant,
-    config: ConfigType,
-    add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None
+    entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
-    "Setup the platform"
-    _LOGGER.info(pformat(config))
+    """Set up ZoneTouch3 sensor entities from a config entry."""
+    data = hass.data[DOMAIN][entry.entry_id]
+    zt3: Zonetouch3 = data["zt3"]
+    global_state = data["global_state"]
 
-    add_entities(
-            [
-                zonetouch_3_temp(
-                    {
-                        "name": config[CONF_NAME] + "Global State" + "01",
-                        "address": config[CONF_IP_ADDRESS],
-                        "port": config[CONF_PORT],
-                        "zone": "0",
-                    }, hass
-                )
-            ]
-        )
+    async_add_entities([ZoneTouch3Temperature(zt3, global_state, entry.entry_id)])
 
-class zonetouch_3_temp(SensorEntity):
 
-    def __init__(self, sensor, hass) -> None:
-        _LOGGER.info(pformat(sensor))
-        self.sensor = Zonetouch3(sensor["address"], sensor["port"], sensor["zone"])
-        self._hass = hass
+class ZoneTouch3Temperature(SensorEntity):
+    """Representation of a ZoneTouch3 temperature sensor."""
+
+    def __init__(self, zt3: Zonetouch3, global_state: str, entry_id: str) -> None:
+        """Initialize the sensor."""
+        self._zt3 = zt3
+        self._entry_id = entry_id
         self._name = "Temperature"
-        self._attr_unique_id = self._name
+        self._attr_unique_id = f"{entry_id}_temperature"
         self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_device_class = SensorDeviceClass.TEMPERATURE
-        self._attr_native_value = self.sensor.return_console_temp(self._hass.data[DOMAIN]['global_state'])
-        
+        self._attr_native_value = zt3.return_console_temp(global_state)
+
+    @property
+    def name(self) -> str:
+        """Return the display name of this sensor."""
+        return self._name
 
     def update(self) -> None:
-        self._attr_native_value = self.sensor.return_console_temp(self._hass.data[DOMAIN]['global_state'])
+        """Update the sensor value."""
+        global_state = self.hass.data[DOMAIN][self._entry_id]["global_state"]
+        if global_state:
+            self._attr_native_value = self._zt3.return_console_temp(global_state)
