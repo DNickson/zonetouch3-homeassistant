@@ -1,14 +1,12 @@
 {
-    "domain": "zonetouch3",
-    "name": "ZoneTouch3",
-    "codeowners": [
-      "@GeoDerp",
-      "@generically-named",
-      "@dn"
-    ],
-    "config_flow": true,
-    "documentation": "https://github.com/DNickson/zonetouch3-polyaire-ha",
-    "issue_tracker": "https://github.com/DNickson/zonetouch3-polyaire-ha/issues",
-    "iot_class": "local_push",
-    "version": "0.0.1"
-  }
+  "domain": "zonetouch3",
+  "name": "ZoneTouch 3",
+  "codeowners": ["@GeoDerp", "@generically-named", "@dn"],
+  "config_flow": true,
+  "documentation": "https://github.com/DNickson/zonetouch3-polyaire-ha",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "issue_tracker": "https://github.com/DNickson/zonetouch3-polyaire-ha/issues",
+  "requirements": [],
+  "version": "0.2.0"
+}

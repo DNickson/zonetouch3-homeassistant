@@ -1,113 +1,133 @@
-"""Platform for light integration."""
+"""Fan entities representing ZoneTouch 3 zone dampers."""
 
 from __future__ import annotations
 
-import logging
-from pprint import pformat
-import time
-from datetime import timedelta
 from typing import Any
 
-import voluptuous as vol
-
-from homeassistant.components.fan import PLATFORM_SCHEMA, FanEntity, FanEntityFeature
-from homeassistant.components.text import PLATFORM_SCHEMA, TextEntity
-from homeassistant.const import CONF_ENTITIES, CONF_IP_ADDRESS, CONF_NAME, CONF_PORT
+from homeassistant.components.fan import FanEntity, FanEntityFeature
 from homeassistant.core import HomeAssistant
-
-# Import the device class from the component that you want to support
-import homeassistant.helpers.config_validation as cv
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
-from .zonetouch3 import Zonetouch3
+from .coordinator import ZoneTouch3ConfigEntry, ZoneTouch3Coordinator
+from .entity import ZoneTouch3Entity
+from .zonetouch3 import PowerCommand, PowerState, ZoneStatus, ZoneTouch3Error
 
-_LOGGER = logging.getLogger("ZoneTouch3")
+PRESET_TURBO = "turbo"
+PERCENTAGE_STEP = 5  # the console adjusts the open percentage in 5% steps
 
-DOMAIN = "zonetouch3"
-SCAN_INTERVAL = timedelta(seconds=5)
 
-# Validation of the user's configuration
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend({
-    vol.Optional(CONF_NAME, default ="zonetouch3"): cv.string,
-    vol.Optional(CONF_ENTITIES, default ="8"): cv.positive_int,
-    vol.Required(CONF_IP_ADDRESS): cv.string,
-    vol.Optional(CONF_PORT, default = 7030): cv.port,
-})
-
-def setup_platform(
+async def async_setup_entry(
     hass: HomeAssistant,
-    config: ConfigType,
-    add_entities: AddEntitiesCallback,
-    discovery_info: DiscoveryInfoType | None = None
+    entry: ZoneTouch3ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
-    "Setup the platform"
-    _LOGGER.info(pformat(config))
-
-    # loop though zone amount, create/entities objects per zone
-    for zone_no in range(0, config[CONF_ENTITIES]):
-        add_entities(
-            [
-                zonetouch_3(
-                    {
-                        "name": config[CONF_NAME] + "_Zone" + str(zone_no),
-                        "address": config[CONF_IP_ADDRESS],
-                        "port": config[CONF_PORT],
-                        "zone": zone_no,
-                    }, hass
-                )
-            ]
-        )
-
-class zonetouch_3(FanEntity):
-
-    _attr_icon = "mdi:air-conditioner"
-    _attr_supported_features = (
-        FanEntityFeature.SET_SPEED
-        | FanEntityFeature.TURN_OFF
-        | FanEntityFeature.TURN_ON
+    """Create one fan per zone reported by the device."""
+    coordinator = entry.runtime_data
+    async_add_entities(
+        ZoneTouch3Fan(coordinator, number) for number in sorted(coordinator.data.zones)
     )
 
-    def __init__(self, fan, hass) -> None:
-        _LOGGER.info(pformat(fan))
-        self.fan = Zonetouch3(fan["address"], fan["port"], fan["zone"])
-        self._attr_unique_id = fan["name"]
-        self._zone = fan["zone"]
-        self._hass = hass
-        self._name = self.fan.return_zone_name(self._hass.data[DOMAIN]['global_state'], self._zone)
-        self._state = self.fan.return_zone_state(self._hass.data[DOMAIN]['global_state'], self._zone)
-        self._attr_percentage = self.fan.return_zone_percentage(self._hass.data[DOMAIN]['global_state'], self._zone)
 
-        # Getters
+class ZoneTouch3Fan(ZoneTouch3Entity, FanEntity):
+    """A single ZoneTouch 3 zone damper."""
+
+    _attr_icon = "mdi:air-conditioner"
+    _attr_speed_count = 100 // PERCENTAGE_STEP
+
+    def __init__(self, coordinator: ZoneTouch3Coordinator, zone_number: int) -> None:
+        super().__init__(coordinator)
+        self._zone_number = zone_number
+        self._attr_unique_id = f"{self._device_id}_zone_{zone_number}"
+
+        features = (
+            FanEntityFeature.SET_SPEED
+            | FanEntityFeature.TURN_ON
+            | FanEntityFeature.TURN_OFF
+        )
+        if coordinator.data.zones[zone_number].turbo_supported:
+            features |= FanEntityFeature.PRESET_MODE
+            self._attr_preset_modes = [PRESET_TURBO]
+        self._attr_supported_features = features
+
+    @property
+    def _zone(self) -> ZoneStatus | None:
+        return self.coordinator.data.zones.get(self._zone_number)
+
+    @property
+    def available(self) -> bool:
+        return super().available and self._zone is not None
+
     @property
     def name(self) -> str:
-        """Return the display name of this fan."""
-        return self._name
-    
+        zone = self._zone
+        if zone is not None and zone.name:
+            return zone.name
+        return f"Zone {self._zone_number + 1}"
+
     @property
     def is_on(self) -> bool | None:
-        """Return true if the entity is on."""
-        return self._state
-    
-    def turn_on(self, **kwargs: Any) -> None:
-        self.fan.update_zone_state('03', 150)
-        self._state = True
-    
-    def turn_off(self, **kwargs: Any) -> None:
-        self.fan.update_zone_state('02', 150)
-        self._state = False
+        zone = self._zone
+        return zone.is_on if zone is not None else None
 
     @property
     def percentage(self) -> int | None:
-        """Return the current percentage."""
-        return self._attr_percentage
-    
-    def set_percentage(self, percentage: int) -> None:
-        self.fan.update_zone_state('80', percentage)
-        self._attr_percentage = percentage
-    
-    def update(self) -> None:
-        """Get live state of individual fan."""
-        if self._hass.data[DOMAIN]['global_state']:
-            self._state = self.fan.return_zone_state(self._hass.data[DOMAIN]['global_state'], self._zone)
-            self._attr_percentage = self.fan.return_zone_percentage(self._hass.data[DOMAIN]['global_state'], self._zone)
+        zone = self._zone
+        return zone.percentage if zone is not None else None
+
+    @property
+    def preset_mode(self) -> str | None:
+        zone = self._zone
+        if zone is not None and zone.power is PowerState.TURBO:
+            return PRESET_TURBO
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        zone = self._zone
+        if zone is None:
+            return None
+        return {"zone_number": self._zone_number, "spill_active": zone.spill_active}
+
+    async def async_turn_on(
+        self,
+        percentage: int | None = None,
+        preset_mode: str | None = None,
+        **kwargs: Any,
+    ) -> None:
+        """Open the zone, optionally at a given percentage or in turbo."""
+        if preset_mode == PRESET_TURBO:
+            await self._async_control(power=PowerCommand.TURBO)
+        elif percentage is not None:
+            await self.async_set_percentage(percentage)
+        else:
+            await self._async_control(power=PowerCommand.ON)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Close the zone."""
+        await self._async_control(power=PowerCommand.OFF)
+
+    async def async_set_percentage(self, percentage: int) -> None:
+        """Set the zone open percentage, turning it on if needed."""
+        if percentage == 0:
+            await self._async_control(power=PowerCommand.OFF)
+        else:
+            await self._async_control(power=PowerCommand.ON, percentage=percentage)
+
+    async def async_set_preset_mode(self, preset_mode: str) -> None:
+        """Set the zone to turbo."""
+        if preset_mode == PRESET_TURBO:
+            await self._async_control(power=PowerCommand.TURBO)
+
+    async def _async_control(
+        self, power: PowerCommand = PowerCommand.KEEP, percentage: int | None = None
+    ) -> None:
+        try:
+            zones = await self.coordinator.client.async_set_zone(
+                self._zone_number, power=power, percentage=percentage
+            )
+        except ZoneTouch3Error as err:
+            raise HomeAssistantError(
+                f"Failed to control zone {self.name}: {err}"
+            ) from err
+        self.coordinator.apply_zone_statuses(zones)
