@@ -248,13 +248,19 @@ async def _read_frame(reader: asyncio.StreamReader) -> tuple[bytes, int, bytes]:
 
 
 def _parse_group_status(data: bytes) -> dict[int, ZoneStatus]:
-    """Parse a group status (0x21) message into per-zone status."""
+    """Parse a group status (0x21) message into per-zone status.
+
+    The protocol document describes 8 bytes of data per group, with turbo
+    support and spill flags in byte 7. Real ZoneTouch 3 firmware has been
+    seen to send only 5 bytes per group; the power/number and percentage
+    bytes are the same, so the flags are simply unavailable there.
+    """
     if len(data) < 8:
         raise ZoneTouch3ProtocolError("Group status message too short")
     common_length = int.from_bytes(data[2:4], "big")
     count = int.from_bytes(data[4:6], "big")
     each_length = int.from_bytes(data[6:8], "big")
-    if each_length < 7:
+    if each_length < 2:
         raise ZoneTouch3ProtocolError(f"Unexpected group data length {each_length}")
 
     zones: dict[int, ZoneStatus] = {}
@@ -273,8 +279,8 @@ def _parse_group_status(data: bytes) -> dict[int, ZoneStatus]:
             number=number,
             power=power,
             percentage=group[1] & 0x7F,
-            turbo_supported=bool(group[6] >> 7),
-            spill_active=bool((group[6] >> 1) & 1),
+            turbo_supported=bool(group[6] >> 7) if each_length >= 7 else False,
+            spill_active=bool((group[6] >> 1) & 1) if each_length >= 7 else False,
         )
         offset += each_length
     return zones
