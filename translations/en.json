@@ -1,0 +1,31 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to ZoneTouch 3",
+        "description": "Enter the address of the ZoneTouch 3 console. The IP address is shown on the console under System Settings → WiFi Settings.",
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the console",
+      "invalid_response": "The console returned an unexpected response",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "This ZoneTouch 3 system is already configured"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "system_id": { "name": "System ID" },
+      "installer": { "name": "Installer" },
+      "installer_phone": { "name": "Installer phone" },
+      "firmware_version": { "name": "Firmware version" },
+      "console_version": { "name": "Console version" }
+    }
+  }
+}
