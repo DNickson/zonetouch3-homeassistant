@@ -163,12 +163,15 @@ def _group_control_data(
 ) -> bytes:
     """Build the data section of a group control (0x20) message."""
     setting = SETTING_SET_PERCENTAGE if percentage is not None else 0
+    # The spec documents the repeat count before the repeat length, but real
+    # firmware uses the opposite order (confirmed against a live system,
+    # whose status messages are laid out the same way).
     return bytes(
         (
             SUBTYPE_GROUP_CONTROL, 0x00,  # sub type, keep 0
             0x00, 0x00,  # common data length
-            0x00, 0x01,  # repeat data count
             0x00, 0x04,  # each repeat data length
+            0x00, 0x01,  # repeat data count
             zone & 0x3F,
             setting | power,
             percentage if percentage is not None else KEEP_PERCENTAGE,
@@ -250,25 +253,41 @@ async def _read_frame(reader: asyncio.StreamReader) -> tuple[bytes, int, bytes]:
 def _parse_group_status(data: bytes) -> dict[int, ZoneStatus]:
     """Parse a group status (0x21) message into per-zone status.
 
-    The protocol document describes 8 bytes of data per group, with turbo
-    support and spill flags in byte 7. Real ZoneTouch 3 firmware has been
-    seen to send only 5 bytes per group; the power/number and percentage
-    bytes are the same, so the flags are simply unavailable there.
+    The spec puts the repeat count in bytes 5-6 and the per-group data
+    length in bytes 7-8, but real firmware sends them the other way around
+    (e.g. 0x0008/0x0005 for five zones of eight bytes). Both orderings fit
+    the payload size, so the two fields are disambiguated by checking under
+    which interpretation the zone numbers are valid and unique.
     """
     if len(data) < 8:
         raise ZoneTouch3ProtocolError("Group status message too short")
     common_length = int.from_bytes(data[2:4], "big")
-    count = int.from_bytes(data[4:6], "big")
-    each_length = int.from_bytes(data[6:8], "big")
-    if each_length < 2:
-        raise ZoneTouch3ProtocolError(f"Unexpected group data length {each_length}")
+    field_a = int.from_bytes(data[4:6], "big")
+    field_b = int.from_bytes(data[6:8], "big")
+    start = 8 + common_length
+    total = len(data) - start
+
+    def plausible(count: int, each: int) -> bool:
+        if not (0 < count <= 16 and each >= 2 and count * each == total):
+            return False
+        numbers = [data[start + i * each] & 0x3F for i in range(count)]
+        return len(set(numbers)) == count and all(n <= 15 for n in numbers)
+
+    if total == 0:
+        return {}
+    if plausible(field_a, field_b):  # documented order: count, length
+        count, each_length = field_a, field_b
+    elif plausible(field_b, field_a):  # order seen from real firmware
+        count, each_length = field_b, field_a
+    else:
+        raise ZoneTouch3ProtocolError(
+            f"Cannot interpret group status message: {data.hex()}"
+        )
 
     zones: dict[int, ZoneStatus] = {}
-    offset = 8 + common_length
+    offset = start
     for _ in range(count):
         group = data[offset : offset + each_length]
-        if len(group) < each_length:
-            raise ZoneTouch3ProtocolError("Truncated group status message")
         power_bits = (group[0] >> 6) & 0b11
         try:
             power = PowerState(power_bits)
