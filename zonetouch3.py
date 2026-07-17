@@ -410,16 +410,21 @@ class ZoneTouch3Client:
         try:
             writer.write(request)
             await asyncio.wait_for(writer.drain(), self._timeout)
+            skipped: list[str] = []
             for _ in range(_MAX_FRAME_SKIP):
                 _, msg_type, data = await asyncio.wait_for(
                     _read_frame(reader), self._timeout
                 )
+                _LOGGER.debug(
+                    "Received frame type 0x%02X data=%s", msg_type, data.hex()
+                )
                 if matches(msg_type, data):
                     return data
-                _LOGGER.debug(
-                    "Skipping unexpected frame type 0x%02X: %s", msg_type, data.hex()
-                )
-            raise ZoneTouch3ProtocolError("No matching response received")
+                skipped.append(f"type=0x{msg_type:02X} data={data.hex()}")
+            raise ZoneTouch3ProtocolError(
+                f"No matching response to {request.hex()}; "
+                f"received: {'; '.join(skipped)}"
+            )
         except (asyncio.IncompleteReadError, TimeoutError, OSError) as err:
             raise ZoneTouch3ConnectionError(
                 f"Communication with {self._host}:{self._port} failed: {err}"

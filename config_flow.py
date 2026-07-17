@@ -42,9 +42,21 @@ class ZoneTouch3ConfigFlow(ConfigFlow, domain=DOMAIN):
             client = ZoneTouch3Client(user_input[CONF_HOST], user_input[CONF_PORT])
             try:
                 state = await client.async_get_state()
-            except ZoneTouch3ConnectionError:
+            except ZoneTouch3ConnectionError as err:
+                _LOGGER.error(
+                    "Cannot connect to ZoneTouch 3 at %s:%s: %s",
+                    user_input[CONF_HOST],
+                    user_input[CONF_PORT],
+                    err,
+                )
                 errors["base"] = "cannot_connect"
-            except ZoneTouch3Error:
+            except ZoneTouch3Error as err:
+                _LOGGER.error(
+                    "Unexpected response from ZoneTouch 3 at %s:%s: %s",
+                    user_input[CONF_HOST],
+                    user_input[CONF_PORT],
+                    err,
+                )
                 errors["base"] = "invalid_response"
             except Exception:
                 _LOGGER.exception("Unexpected error connecting to ZoneTouch 3")
